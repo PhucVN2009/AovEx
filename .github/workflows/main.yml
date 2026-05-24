@@ -1,4 +1,4 @@
-name: Build StarAndroidInject APK
+name: Build StarAndroidInject AP
 
 on:
   push:
