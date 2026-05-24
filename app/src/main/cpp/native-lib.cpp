@@ -9,11 +9,13 @@
 #include "STARCOOL.h"
 #include "SocketControl.h"
 #include "ESP.h"
+#include "AntiDialog.h"
 
 // ========== TOGGLE FLAGS ==========
-bool hackMap    = false;   // Map Hack (visibility)
-bool hackCamXa  = false;   // Cam Xa toggle
-float camXaValue = 0.0f;   // 0 - 10
+bool hackMap        = false;
+bool hackCamXa      = false;
+float camXaValue    = 0.0f;
+bool hackAntiDialog = false;
 // hackESP is declared in ESP.h
 
 // ========== MAP HACK (SetVisible) ==========
@@ -133,6 +135,36 @@ void *Init_Thread(void *) {
                       (void **) &old_eglSwapBuffers);
         }
     }
+
+    // ── Anti-Dialog: Chặn thông báo/dialog từ server (ban, kick) ───────────
+    // Handle_NetworkOpenMessageBoxProto  RVA: 0x742EB28
+    DobbyHook((void *)(il2cppMap + 0x742EB28),
+              (void *) Hook_Handle_NetworkOpenMessageBoxProto,
+              (void **) &old_Handle_NetworkOpenMessageBoxProto);
+    // IOpenMessageBox (NetworkModule)    RVA: 0x742E698
+    DobbyHook((void *)(il2cppMap + 0x742E698),
+              (void *) Hook_IOpenMessageBox_Net,
+              (void **) &old_IOpenMessageBox_Net);
+    // IOpenMessageBoxCallback (NetworkModule) RVA: 0x742E854
+    DobbyHook((void *)(il2cppMap + 0x742E854),
+              (void *) Hook_IOpenMessageBoxCallback_Net,
+              (void **) &old_IOpenMessageBoxCallback_Net);
+    // IOpenMessageBox (LNetwork)         RVA: 0x6F2D02C
+    DobbyHook((void *)(il2cppMap + 0x6F2D02C),
+              (void *) Hook_IOpenMessageBox_LNet,
+              (void **) &old_IOpenMessageBox_LNet);
+    // IOpenMessageBoxCallback (LNetwork) RVA: 0x6F29208
+    DobbyHook((void *)(il2cppMap + 0x6F29208),
+              (void *) Hook_IOpenMessageBoxCallback_LNet,
+              (void **) &old_IOpenMessageBoxCallback_LNet);
+    // checkAndShowBanGameAlert           RVA: 0x77ED020
+    DobbyHook((void *)(il2cppMap + 0x77ED020),
+              (void *) Hook_checkAndShowBanGameAlert,
+              (void **) &old_checkAndShowBanGameAlert);
+    // OpenPunishBanGameAlert             RVA: 0x72E0AEC
+    DobbyHook((void *)(il2cppMap + 0x72E0AEC),
+              (void *) Hook_OpenPunishBanGameAlert,
+              (void **) &old_OpenPunishBanGameAlert);
 
     // Keep thread alive
     while (true) {

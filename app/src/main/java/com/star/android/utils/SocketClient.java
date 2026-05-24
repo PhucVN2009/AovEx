@@ -33,4 +33,8 @@ public class SocketClient {
     public static void setEspLine(boolean active) {
         send("ESP_LINE:" + (active ? "1" : "0"));
     }
+
+    public static void setAntiDialog(boolean active) {
+        send("ANTI_DIALOG:" + (active ? "1" : "0"));
+    }
 }
