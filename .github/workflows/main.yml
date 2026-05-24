@@ -1,0 +1,84 @@
+name: Build StarAndroidInject APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # Dùng Node.js 24 cho tất cả actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout source code
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # 2. Cài JDK 21 (bắt buộc cho AGP 9.x)
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      # 3. Cài NDK và CMake qua sdkmanager (runner ubuntu đã có Android SDK sẵn)
+      - name: Install NDK and CMake via sdkmanager
+        run: |
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1" \
+            --sdk_root=$ANDROID_SDK_ROOT
+
+      # 4. Cache Gradle
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # 5. Build Debug APK
+      - name: Build Debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      # 6. Upload APK
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: StarAndroidInject-debug
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      # ─── BUILD RELEASE (bỏ comment nếu có keystore) ──────────────────────
+      # - name: Build Release APK
+      #   env:
+      #     KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}   # base64 encoded .jks
+      #     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      #     STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+      #   run: |
+      #     echo "$KEYSTORE_FILE" | base64 -d > app/release.jks
+      #     ./gradlew assembleRelease \
+      #       -Pandroid.injected.signing.store.file=$PWD/app/release.jks \
+      #       -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+      #       -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+      #       -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
+      #       --stacktrace
+      #
+      # - name: Upload Release APK
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: StarAndroidInject-release
+      #     path: app/build/outputs/apk/release/*.apk
+      #     retention-days: 7
