@@ -37,4 +37,8 @@ find_library(log-lib log)
 target_link_libraries(Starcool
         ${log-lib}
         dobby
+        GLESv2
+        EGL
+        atomic
+        m
 )
