@@ -12,6 +12,7 @@
 extern bool hackMap;
 extern bool hackCamXa;
 extern float camXaValue;
+extern bool hackESP;
 static bool main_thread_flag = true;
 
 inline void* socket_server_thread(void* arg) {
@@ -58,6 +59,9 @@ inline void* socket_server_thread(void* arg) {
             else if (msg.find("CAMXA_VAL:") == 0) {
                 camXaValue = std::stof(msg.substr(10));
                 hackCamXa = (camXaValue > 0.0f);
+            }
+            else if (msg.find("ESP_LINE:") == 0) {
+                hackESP = (msg.substr(9) == "1");
             }
         }
         close(new_socket);

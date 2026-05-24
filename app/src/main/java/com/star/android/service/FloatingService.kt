@@ -152,6 +152,16 @@ class FloatingService : Service() {
                 }
             })
 
+            addView(CheckBox(context).apply {
+                text = "🎯 ESP Line Box Địch"
+                setTextColor(Color.RED)
+                textSize = 18f
+                setPadding(20, 10, 0, 10)
+                setOnCheckedChangeListener { _, isChecked ->
+                    SocketClient.setEspLine(isChecked)
+                }
+            })
+
             addView(TextView(context).apply {
                 text = "📷 Cam Xa (0 → 10)"
                 setTextColor(Color.WHITE)

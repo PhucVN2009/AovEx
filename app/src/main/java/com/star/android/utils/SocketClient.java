@@ -29,4 +29,8 @@ public class SocketClient {
     public static void setCamXa(float value) {
         send("CAMXA_VAL:" + value);
     }
+
+    public static void setEspLine(boolean active) {
+        send("ESP_LINE:" + (active ? "1" : "0"));
+    }
 }
