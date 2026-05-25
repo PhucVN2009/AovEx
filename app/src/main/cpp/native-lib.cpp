@@ -115,9 +115,9 @@ void *Init_Thread(void *) {
     fpW2S         = (fn_W2S)(il2cppMap + 0x94ADBF4);
 
     // ── ESP: Hook glViewport to capture screen size ─────────────────────────
-    void *libGLES = dlopen("libGLESv2.so", RTLD_LAZY);
-    if (libGLES) {
-        void *pViewport = dlsym(libGLES, "glViewport");
+    // Dùng RTLD_DEFAULT để tìm symbol đã được game load, không mở lại libGLESv2.so
+    {
+        void *pViewport = dlsym(RTLD_DEFAULT, "glViewport");
         if (pViewport) {
             DobbyHook(pViewport,
                       (void *) new_glViewport,
@@ -126,9 +126,9 @@ void *Init_Thread(void *) {
     }
 
     // ── ESP: Hook eglSwapBuffers to draw overlay ────────────────────────────
-    void *libEGL = dlopen("libEGL.so", RTLD_LAZY);
-    if (libEGL) {
-        void *pSwap = dlsym(libEGL, "eglSwapBuffers");
+    // Dùng RTLD_DEFAULT để intercept đúng hàm Unity đang dùng trong process
+    {
+        void *pSwap = dlsym(RTLD_DEFAULT, "eglSwapBuffers");
         if (pSwap) {
             DobbyHook(pSwap,
                       (void *) new_eglSwapBuffers,
@@ -136,7 +136,11 @@ void *Init_Thread(void *) {
         }
     }
 
-    // ── Anti-Dialog: Chặn thông báo/dialog từ server (ban, kick) ───────────
+    // ── Anti-Dialog: OpenMessageBoxBase (CATCH-ALL mọi dialog OLDSYS) ──────
+    // RVA: 0x72D8DEC — tất cả OpenMessageBox/* đều gọi hàm này
+    DobbyHook((void *)(il2cppMap + 0x72D8DEC),
+              (void *) Hook_OpenMessageBoxBase,
+              (void **) &old_OpenMessageBoxBase);
     // Handle_NetworkOpenMessageBoxProto  RVA: 0x742EB28
     DobbyHook((void *)(il2cppMap + 0x742EB28),
               (void *) Hook_Handle_NetworkOpenMessageBoxProto,
