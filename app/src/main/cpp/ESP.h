@@ -62,10 +62,14 @@ static void* g_camSysInst = nullptr;
 typedef void*  (*fn_GetActorMgr)();
 typedef void*  (*fn_GetMainCam)(void* camSys, void* mi);
 typedef Vec3   (*fn_W2S)(void* cam, Vec3 pos, void* mi);
+// IsHostPlayer(ref PoolObjHandle<ActorLinker>) RVA: 0x7DC832C
+// static bool — nhận pointer đến handle (16-byte struct), trả true nếu là actor local
+typedef bool   (*fn_IsHostPlayer)(void* handlePtr, void* mi);
 
-static fn_GetActorMgr fpGetActorMgr = nullptr;
-static fn_GetMainCam  fpGetMainCam  = nullptr;
-static fn_W2S         fpW2S         = nullptr;
+static fn_GetActorMgr  fpGetActorMgr  = nullptr;
+static fn_GetMainCam   fpGetMainCam   = nullptr;
+static fn_W2S          fpW2S          = nullptr;
+static fn_IsHostPlayer fpIsHostPlayer = nullptr;
 
 // ─── Memory Helpers ───────────────────────────────────────────────────────────
 
@@ -104,29 +108,36 @@ static void ESP_Update() {
     int       heroCount = espRd<int>(listPtr, 0x18);
     if (!arrPtr || heroCount <= 0 || heroCount > 20) { g_espBoxCnt = 0; return; }
 
-    // Discover local player's camp
+    // Find local player: call IsHostPlayer as instance method (actor pointer = this)
+    // Also try mIsHostCtrlActor field (0x190) as secondary fallback
     uint8_t myCamp = 0xFF;
+    uintptr_t myActor = 0;
     for (int i = 0; i < heroCount && i < 20; i++) {
-        // Array elements start at arr+0x20, each PoolObjHandle is 16 bytes
-        // ActorLinker* is at handle+0x08 (_handleSeq:uint32 at 0, pad 4, ptr at 8)
         uintptr_t handleBase = arrPtr + 0x20 + (uintptr_t)i * 0x10;
         uintptr_t actor = espRd<uintptr_t>(handleBase, 0x08);
         if (!actor) continue;
-        if (espRd<bool>(actor, 0x190)) {   // mIsHostCtrlActor
-            myCamp = espRd<uint8_t>(actor, 0x1BC);  // monsterCamp
+        bool isLocal = false;
+        if (fpIsHostPlayer)
+            isLocal = fpIsHostPlayer((void*)actor, nullptr);  // instance method: actor as this
+        if (!isLocal)
+            isLocal = espRd<bool>(actor, 0x190);              // mIsHostCtrlActor fallback
+        if (isLocal) {
+            myCamp = espRd<uint8_t>(actor, 0x1BC);
+            myActor = actor;
             break;
         }
     }
-    if (myCamp == 0xFF) { g_espBoxCnt = 0; return; }
+    // If camp unknown, still render — skip only neutral actors (camp==0)
 
     int cnt = 0;
     for (int i = 0; i < heroCount && i < 20 && cnt < ESP_MAX_ACTORS; i++) {
         uintptr_t handleBase = arrPtr + 0x20 + (uintptr_t)i * 0x10;
         uintptr_t actor = espRd<uintptr_t>(handleBase, 0x08);
         if (!actor) continue;
-        if (espRd<bool>(actor, 0x190)) continue;           // skip self
+        if (actor == myActor) continue;                    // skip self (by pointer)
         uint8_t camp = espRd<uint8_t>(actor, 0x1BC);
-        if (camp == myCamp || camp == 0) continue;         // skip allies + neutral
+        if (camp == 0) continue;                           // skip neutral/minions
+        if (myCamp != 0xFF && camp == myCamp) continue;   // skip allies when camp known
 
         // _location: VInt3 at 0x16C  (x=0x16C, y=0x170, z=0x174)
         // VInt divide by 1000 -> Unity world units
@@ -140,11 +151,15 @@ static void ESP_Update() {
         Vec3 fSc = fpW2S(cam, feet, nullptr);
         Vec3 hSc = fpW2S(cam, head, nullptr);
 
-        // z > 0 means in front of camera; z is distance from camera plane
-        if (fSc.z <= 0.01f) continue;
+        // z > 0 means in front of camera
+        if (fSc.z <= 0.01f || hSc.z <= 0.01f) continue;
 
         float boxH = hSc.y - fSc.y;
-        if (boxH < 5.0f) continue;   // too small / too far
+        // Fallback: fixed fraction of screen height when projection gives bad result
+        if (boxH < 5.0f) {
+            boxH = (float)g_sh / 7.0f * (1.0f / (fSc.z > 0 ? fSc.z * 0.05f + 1.0f : 1.0f));
+            if (boxH < 10.0f) continue;
+        }
         float boxW = boxH * 0.5f;
 
         // Read HP from ValueLinkerComponent at offset 0x28
