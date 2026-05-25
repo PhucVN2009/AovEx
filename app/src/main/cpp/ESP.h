@@ -62,10 +62,14 @@ static void* g_camSysInst = nullptr;
 typedef void*  (*fn_GetActorMgr)();
 typedef void*  (*fn_GetMainCam)(void* camSys, void* mi);
 typedef Vec3   (*fn_W2S)(void* cam, Vec3 pos, void* mi);
+// IsHostPlayer(ref PoolObjHandle<ActorLinker>) RVA: 0x7DC832C
+// static bool — nhận pointer đến handle (16-byte struct), trả true nếu là actor local
+typedef bool   (*fn_IsHostPlayer)(void* handlePtr, void* mi);
 
-static fn_GetActorMgr fpGetActorMgr = nullptr;
-static fn_GetMainCam  fpGetMainCam  = nullptr;
-static fn_W2S         fpW2S         = nullptr;
+static fn_GetActorMgr  fpGetActorMgr  = nullptr;
+static fn_GetMainCam   fpGetMainCam   = nullptr;
+static fn_W2S          fpW2S          = nullptr;
+static fn_IsHostPlayer fpIsHostPlayer = nullptr;
 
 // ─── Memory Helpers ───────────────────────────────────────────────────────────
 
@@ -104,15 +108,19 @@ static void ESP_Update() {
     int       heroCount = espRd<int>(listPtr, 0x18);
     if (!arrPtr || heroCount <= 0 || heroCount > 20) { g_espBoxCnt = 0; return; }
 
-    // Discover local player's camp
+    // Tìm camp của local player qua IsHostPlayer() (RVA: 0x7DC832C)
+    // Fallback: đọc trực tiếp mIsHostCtrlActor (0x190) nếu chưa có fp
     uint8_t myCamp = 0xFF;
     for (int i = 0; i < heroCount && i < 20; i++) {
-        // Array elements start at arr+0x20, each PoolObjHandle is 16 bytes
-        // ActorLinker* is at handle+0x08 (_handleSeq:uint32 at 0, pad 4, ptr at 8)
         uintptr_t handleBase = arrPtr + 0x20 + (uintptr_t)i * 0x10;
         uintptr_t actor = espRd<uintptr_t>(handleBase, 0x08);
         if (!actor) continue;
-        if (espRd<bool>(actor, 0x190)) {   // mIsHostCtrlActor
+        bool isLocal = false;
+        if (fpIsHostPlayer)
+            isLocal = fpIsHostPlayer((void*)handleBase, nullptr);
+        else
+            isLocal = espRd<bool>(actor, 0x190);   // mIsHostCtrlActor fallback
+        if (isLocal) {
             myCamp = espRd<uint8_t>(actor, 0x1BC);  // monsterCamp
             break;
         }

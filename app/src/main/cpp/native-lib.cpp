@@ -108,11 +108,13 @@ void *Init_Thread(void *) {
 
     // ── ESP: Set up IL2CPP function pointers ────────────────────────────────
     // KyriosFramework.get_actorManager()  static, RVA: 0x89179A8
-    fpGetActorMgr = (fn_GetActorMgr)(il2cppMap + 0x89179A8);
+    fpGetActorMgr  = (fn_GetActorMgr)(il2cppMap + 0x89179A8);
     // CameraSystem.get_MainCamera()       instance, RVA: 0x8D53F48
-    fpGetMainCam  = (fn_GetMainCam)(il2cppMap + 0x8D53F48);
+    fpGetMainCam   = (fn_GetMainCam)(il2cppMap + 0x8D53F48);
     // Camera.WorldToScreenPoint(Vector3)  instance, RVA: 0x94ADBF4
-    fpW2S         = (fn_W2S)(il2cppMap + 0x94ADBF4);
+    fpW2S          = (fn_W2S)(il2cppMap + 0x94ADBF4);
+    // IsHostPlayer(ref PoolObjHandle<ActorLinker>) static, RVA: 0x7DC832C
+    fpIsHostPlayer = (fn_IsHostPlayer)(il2cppMap + 0x7DC832C);
 
     // ── ESP: Hook glViewport to capture screen size ─────────────────────────
     // Dùng RTLD_DEFAULT để tìm symbol đã được game load, không mở lại libGLESv2.so
@@ -136,11 +138,7 @@ void *Init_Thread(void *) {
         }
     }
 
-    // ── Anti-Dialog: OpenMessageBoxBase (CATCH-ALL mọi dialog OLDSYS) ──────
-    // RVA: 0x72D8DEC — tất cả OpenMessageBox/* đều gọi hàm này
-    DobbyHook((void *)(il2cppMap + 0x72D8DEC),
-              (void *) Hook_OpenMessageBoxBase,
-              (void **) &old_OpenMessageBoxBase);
+    // ── Anti-Dialog ───────────────────────────────────────────────────────────
     // Handle_NetworkOpenMessageBoxProto  RVA: 0x742EB28
     DobbyHook((void *)(il2cppMap + 0x742EB28),
               (void *) Hook_Handle_NetworkOpenMessageBoxProto,
