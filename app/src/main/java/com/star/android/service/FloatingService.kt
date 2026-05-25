@@ -162,6 +162,16 @@ class FloatingService : Service() {
                 }
             })
 
+            addView(CheckBox(context).apply {
+                text = "🛡 Chặn Thông Báo Ban"
+                setTextColor(Color.CYAN)
+                textSize = 18f
+                setPadding(20, 10, 0, 10)
+                setOnCheckedChangeListener { _, isChecked ->
+                    SocketClient.setAntiDialog(isChecked)
+                }
+            })
+
             addView(TextView(context).apply {
                 text = "📷 Cam Xa (0 → 10)"
                 setTextColor(Color.WHITE)

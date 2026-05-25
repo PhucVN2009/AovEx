@@ -108,36 +108,33 @@ static void ESP_Update() {
     int       heroCount = espRd<int>(listPtr, 0x18);
     if (!arrPtr || heroCount <= 0 || heroCount > 20) { g_espBoxCnt = 0; return; }
 
-    // Find local player: call IsHostPlayer as instance method (actor pointer = this)
-    // Also try mIsHostCtrlActor field (0x190) as secondary fallback
+    // Tìm camp của local player qua IsHostPlayer() (RVA: 0x7DC832C)
+    // Fallback: đọc trực tiếp mIsHostCtrlActor (0x190) nếu chưa có fp
     uint8_t myCamp = 0xFF;
-    uintptr_t myActor = 0;
     for (int i = 0; i < heroCount && i < 20; i++) {
         uintptr_t handleBase = arrPtr + 0x20 + (uintptr_t)i * 0x10;
         uintptr_t actor = espRd<uintptr_t>(handleBase, 0x08);
         if (!actor) continue;
         bool isLocal = false;
         if (fpIsHostPlayer)
-            isLocal = fpIsHostPlayer((void*)actor, nullptr);  // instance method: actor as this
-        if (!isLocal)
-            isLocal = espRd<bool>(actor, 0x190);              // mIsHostCtrlActor fallback
+            isLocal = fpIsHostPlayer((void*)handleBase, nullptr);
+        else
+            isLocal = espRd<bool>(actor, 0x190);   // mIsHostCtrlActor fallback
         if (isLocal) {
-            myCamp = espRd<uint8_t>(actor, 0x1BC);
-            myActor = actor;
+            myCamp = espRd<uint8_t>(actor, 0x1BC);  // monsterCamp
             break;
         }
     }
-    // If camp unknown, still render — skip only neutral actors (camp==0)
+    if (myCamp == 0xFF) { g_espBoxCnt = 0; return; }
 
     int cnt = 0;
     for (int i = 0; i < heroCount && i < 20 && cnt < ESP_MAX_ACTORS; i++) {
         uintptr_t handleBase = arrPtr + 0x20 + (uintptr_t)i * 0x10;
         uintptr_t actor = espRd<uintptr_t>(handleBase, 0x08);
         if (!actor) continue;
-        if (actor == myActor) continue;                    // skip self (by pointer)
+        if (espRd<bool>(actor, 0x190)) continue;           // skip self
         uint8_t camp = espRd<uint8_t>(actor, 0x1BC);
-        if (camp == 0) continue;                           // skip neutral/minions
-        if (myCamp != 0xFF && camp == myCamp) continue;   // skip allies when camp known
+        if (camp == myCamp || camp == 0) continue;         // skip allies + neutral
 
         // _location: VInt3 at 0x16C  (x=0x16C, y=0x170, z=0x174)
         // VInt divide by 1000 -> Unity world units
@@ -151,15 +148,11 @@ static void ESP_Update() {
         Vec3 fSc = fpW2S(cam, feet, nullptr);
         Vec3 hSc = fpW2S(cam, head, nullptr);
 
-        // z > 0 means in front of camera
-        if (fSc.z <= 0.01f || hSc.z <= 0.01f) continue;
+        // z > 0 means in front of camera; z is distance from camera plane
+        if (fSc.z <= 0.01f) continue;
 
         float boxH = hSc.y - fSc.y;
-        // Fallback: fixed fraction of screen height when projection gives bad result
-        if (boxH < 5.0f) {
-            boxH = (float)g_sh / 7.0f * (1.0f / (fSc.z > 0 ? fSc.z * 0.05f + 1.0f : 1.0f));
-            if (boxH < 10.0f) continue;
-        }
+        if (boxH < 5.0f) continue;   // too small / too far
         float boxW = boxH * 0.5f;
 
         // Read HP from ValueLinkerComponent at offset 0x28

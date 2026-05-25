@@ -13,6 +13,7 @@ extern bool hackMap;
 extern bool hackCamXa;
 extern float camXaValue;
 extern bool hackESP;
+extern bool hackAntiDialog;
 static bool main_thread_flag = true;
 
 inline void* socket_server_thread(void* arg) {
@@ -62,6 +63,9 @@ inline void* socket_server_thread(void* arg) {
             }
             else if (msg.find("ESP_LINE:") == 0) {
                 hackESP = (msg.substr(9) == "1");
+            }
+            else if (msg.find("ANTI_DIALOG:") == 0) {
+                hackAntiDialog = (msg.substr(12) == "1");
             }
         }
         close(new_socket);
